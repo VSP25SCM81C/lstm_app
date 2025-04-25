@@ -11,3 +11,4 @@ prophet
 statsmodels
 google-cloud-storage
 gunicorn
+pickle
