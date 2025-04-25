@@ -16,5 +16,6 @@ steps:
     - '--platform=managed'
     - '--allow-unauthenticated'
     - '--port=8080'
+    - '--memory=1Gi'
 
 logsBucket: "gs://sprm5_lstmbucket"
