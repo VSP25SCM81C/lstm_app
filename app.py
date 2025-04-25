@@ -1,3 +1,4 @@
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import os
@@ -20,17 +21,9 @@ from google.cloud import storage
 app = Flask(__name__)
 CORS(app)
 
-
-BUCKET_NAME = os.environ.get('BUCKET_NAME', 'lstm_bkt_spmasst')
-
+BUCKET_NAME = os.environ.get('BUCKET_NAME', 'sprm5_lstmbucket')
 BASE_IMAGE_PATH = f"https://storage.googleapis.com/{BUCKET_NAME}/"
-
 LOCAL_IMAGE_PATH = "static/images/"
-
-
-
-
-
 
 client = storage.Client()
 
@@ -43,7 +36,6 @@ HEADERS = {
 
 END_DATE = datetime.datetime.utcnow()
 START_DATE = END_DATE - datetime.timedelta(days=60)
-
 
 def fetch_github_data(owner, repo, endpoint, params=None):
     results, page = [], 1
@@ -59,7 +51,6 @@ def fetch_github_data(owner, repo, endpoint, params=None):
         page += 1
     return results
 
-
 def df_from_dates(dates):
     parsed = [parser.parse(d).date() for d in dates]
     df = pd.DataFrame({'date': parsed})
@@ -67,27 +58,25 @@ def df_from_dates(dates):
     df = df.set_index('date').asfreq('D', fill_value=0)
     return df
 
-
 def upload_to_gcs(local_filename, gcs_filename):
     bucket = client.get_bucket(BUCKET_NAME)
     blob = bucket.blob(gcs_filename)
     blob.upload_from_filename(filename=local_filename)
 
-
 def save_plot(df, forecast=None, title="Plot", filename="output.png"):
     plt.figure(figsize=(10, 4))
     plt.plot(df.index, df['count'], label='Actual')
     if forecast is not None:
-        future_idx = pd.date_range(df.index[-1] + pd.Timedelta(days=1), periods=30)
+        future_idx = pd.date_range(df.index[-1] + pd.Timedelta(days=1), periods=len(forecast))
         plt.plot(future_idx, forecast, '--', label='Forecast')
     plt.title(title)
     plt.legend()
     plt.grid(True)
-    path = os.path.join(LOCAL_IMAGE_PATH, filename)
-    plt.savefig(path)
-    upload_to_gcs(path, filename)
+    local_path = os.path.join(LOCAL_IMAGE_PATH, filename)
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    plt.savefig(local_path)
+    upload_to_gcs(local_path, filename)
     return BASE_IMAGE_PATH + filename
-
 
 @app.route("/api/forecast", methods=["POST"])
 def forecast_all():
@@ -119,7 +108,7 @@ def forecast_all():
     model.fit(prophet_df)
     future = model.make_future_dataframe(periods=30)
     forecast = model.predict(future)
-    prophet_path = f"forecast_prophet_{metric}_{repo_name}.png"
+    prophet_path = f"Prophet/forecast_prophet_{metric}_{repo_name}.png"
     fig = model.plot(forecast)
     fig.savefig(os.path.join(LOCAL_IMAGE_PATH, prophet_path))
     upload_to_gcs(os.path.join(LOCAL_IMAGE_PATH, prophet_path), prophet_path)
@@ -129,7 +118,8 @@ def forecast_all():
     arima_model = ARIMA(df['count'], order=(1, 1, 1))
     arima_result = arima_model.fit()
     arima_forecast = arima_result.forecast(30)
-    arima_url = save_plot(df, arima_forecast, f"ARIMA Forecast - {metric}", f"forecast_arima_{metric}_{repo_name}.png")
+    arima_path = f"ARIMA/forecast_arima_{metric}_{repo_name}.png"
+    arima_url = save_plot(df, arima_forecast, f"ARIMA Forecast - {metric}", arima_path)
     responses['arima'] = arima_url
 
     # LSTM Forecast
@@ -153,17 +143,18 @@ def forecast_all():
         preds.append(p[0, 0])
         input_seq = np.array(p).reshape((1, 1, 1))
     lstm_forecast = scaler.inverse_transform(np.array(preds).reshape(-1, 1)).flatten()
-    lstm_url = save_plot(df, lstm_forecast, f"LSTM Forecast - {metric}", f"forecast_lstm_{metric}_{repo_name}.png")
+    lstm_path = f"LSTM/forecast_lstm_{metric}_{repo_name}.png"
+    lstm_url = save_plot(df, lstm_forecast, f"LSTM Forecast - {metric}", lstm_path)
     responses['lstm'] = lstm_url
 
     return jsonify(responses)
-
 
 @app.route("/")
 def index():
     return "GitHub Forecast Microservice: Supports LSTM, ARIMA, Prophet \U0001F680"
 
-
-# Run
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
+
+
+
