@@ -216,7 +216,7 @@ def get_predictions():
 @app.route('/api/list-images', methods=['GET'])
 def list_images():
     try:
-        model_type = request.args.get('model')  # Example: 'LSTM', 'ARIMA', 'Prophet'
+        model_type = 'arima'
 
         if not model_type:
             return jsonify({"error": "Model type must be provided as ?model=LSTM or ARIMA or Prophet"}), 400
@@ -226,7 +226,7 @@ def list_images():
         bucket = storage_client.bucket(BUCKET_NAME)
 
         # Define prefix path based on model
-        prefix_path = f"model/{model_type}/"
+        prefix_path = f"models/{model_type}/"
 
         blobs = bucket.list_blobs(prefix=prefix_path)
         
