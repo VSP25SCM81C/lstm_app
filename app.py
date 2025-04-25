@@ -213,7 +213,36 @@ def get_predictions():
 
     return jsonify(final_predictions)
 
+@app.route('/api/list-images', methods=['GET'])
+def list_images():
+    try:
+        model_type = request.args.get('model')  # Example: 'LSTM', 'ARIMA', 'Prophet'
 
+        if not model_type:
+            return jsonify({"error": "Model type must be provided as ?model=LSTM or ARIMA or Prophet"}), 400
+
+        # Initialize GCS client
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
+
+        # Define prefix path based on model
+        prefix_path = f"model/{model_type}/"
+
+        blobs = bucket.list_blobs(prefix=prefix_path)
+        
+        images = []
+        for blob in blobs:
+            if blob.name.endswith('.png'):  # Only list PNG image files
+                img_url = f"https://storage.googleapis.com/{BUCKET_NAME}/{blob.name}"
+                images.append(img_url)
+
+        return jsonify({
+            "model": model_type,
+            "images": images
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/")
 def index():
