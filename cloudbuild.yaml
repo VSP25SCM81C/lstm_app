@@ -1,27 +1,20 @@
-# cloudbuild.yaml
-
 steps:
-# Step 1: Build Docker image and tag it with your GCP project and image name
 - name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', 'gcr.io/nlp-lstm-457707/flask-github-visualizer', '.']
 
-# Step 2: Push the image to Google Container Registry
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push', 'gcr.io/nlp-lstm-457707/flask-github-visualizer']
 
-# Step 3: Deploy the container image to Cloud Run
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
   entrypoint: gcloud
   args:
     - run
     - deploy
-    - 'lstm-app'
+    - 'flask-github-service'
     - '--image=gcr.io/nlp-lstm-457707/flask-github-visualizer'
     - '--region=us-central1'
     - '--platform=managed'
     - '--allow-unauthenticated'
     - '--port=8080'
 
-# Final image output for reference
-images:
-- gcr.io/nlp-lstm-457707/flask-github-visualizer
+logsBucket: "gs://sprm5_lstmbucket"
