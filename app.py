@@ -149,6 +149,72 @@ def forecast_all():
 
     return jsonify(responses)
 
+
+# --- Model Loading ---
+with open('lstm_models.pkl', 'rb') as f:
+    lstm_models = pickle.load(f)
+
+with open('prophet_models.pkl', 'rb') as f:
+    prophet_models = pickle.load(f)
+
+with open('arima_models.pkl', 'rb') as f:
+    arima_models = pickle.load(f)
+
+print("✅ Models loaded successfully!")
+
+# --- Prediction Functions ---
+def predict_lstm(model_scaler_tuple, steps=7):
+    model, scaler = model_scaler_tuple
+    last_sequence = np.array([[0.5], [0.5], [0.5]])  
+    last_sequence = np.reshape(last_sequence, (1, 3, 1))
+
+    predictions = []
+    for _ in range(steps):
+        pred = model.predict(last_sequence, verbose=0)
+        pred_value = pred[0][0]
+        pred_rescaled = scaler.inverse_transform(np.array([[pred_value]]))[0][0]
+        predictions.append(pred_rescaled)
+        last_sequence = np.append(last_sequence[:, 1:, :], np.array([[[pred_value]]]), axis=1)
+
+    return predictions
+
+def predict_prophet(model, periods=7):
+    future = model.make_future_dataframe(periods=periods)
+    forecast = model.predict(future)
+    return forecast[['ds', 'yhat']].tail(periods)
+
+def predict_arima(model, steps=7):
+    forecast = model.forecast(steps=steps)
+    return forecast
+
+# --- API Endpoints ---
+@app.route('/predict', methods=['GET'])
+def get_predictions():
+    final_predictions = {
+        "lstm": {},
+        "prophet": {},
+        "arima": {}
+    }
+
+    targets = ['issues', 'pulls', 'commits']
+
+    for target in targets:
+        # LSTM
+        lstm_preds = predict_lstm(lstm_models[target], steps=7)
+        final_predictions["lstm"][target] = lstm_preds
+
+        # Prophet
+        prophet_preds = predict_prophet(prophet_models[target], periods=7)
+        final_predictions["prophet"][target] = prophet_preds.to_dict(orient='records')
+
+        # ARIMA
+        arima_preds = predict_arima(arima_models[target], steps=7)
+        final_predictions["arima"][target] = list(arima_preds.values)
+
+    return jsonify(final_predictions)
+
+
+
 @app.route("/")
 def index():
     return "GitHub Forecast Microservice: Supports LSTM, ARIMA, Prophet \U0001F680"
